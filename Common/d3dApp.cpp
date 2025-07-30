@@ -121,8 +121,8 @@ bool D3DApp::Initialize()
 void D3DApp::CreateRtvAndDsvDescriptorHeaps()
 {
     D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc;
-    rtvHeapDesc.NumDescriptors = SwapChainBufferCount;
-    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    rtvHeapDesc.NumDescriptors = SwapChainBufferCount;		// SwapChainBufferCount是2
+    rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;		// 分别为前台缓冲区和后台缓冲区
     rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	rtvHeapDesc.NodeMask = 0;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(
@@ -131,13 +131,14 @@ void D3DApp::CreateRtvAndDsvDescriptorHeaps()
 
     D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc;
     dsvHeapDesc.NumDescriptors = 1;
-    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;		// 共用一个深度/模板缓冲区
     dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	dsvHeapDesc.NodeMask = 0;
     ThrowIfFailed(md3dDevice->CreateDescriptorHeap(
         &dsvHeapDesc, IID_PPV_ARGS(mDsvHeap.GetAddressOf())));
 }
 
+// 如果窗口尺寸有更改，就需要重新重置一遍
 void D3DApp::OnResize()
 {
 	assert(md3dDevice);
@@ -162,17 +163,20 @@ void D3DApp::OnResize()
 		DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH));
 
 	mCurrBackBuffer = 0;
- 
+
+	// 书 P109
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHeapHandle(mRtvHeap->GetCPUDescriptorHandleForHeapStart());
 	for (UINT i = 0; i < SwapChainBufferCount; i++)
 	{
-		ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i])));
+		ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&mSwapChainBuffer[i])));	// 得到后台缓冲区资源
+		// 为获取到的 后台缓冲区 创建 渲染目标视图
 		md3dDevice->CreateRenderTargetView(mSwapChainBuffer[i].Get(), nullptr, rtvHeapHandle);
+		// 让rtvHeapHandle进行一个单位的偏移
 		rtvHeapHandle.Offset(1, mRtvDescriptorSize);
 	}
 
     // Create the depth/stencil buffer and view.
-    D3D12_RESOURCE_DESC depthStencilDesc;
+    D3D12_RESOURCE_DESC depthStencilDesc;		// 深度缓冲区其实就是2D纹理，所以这里的操作就是 创建 描述纹理的结构体
     depthStencilDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
     depthStencilDesc.Alignment = 0;
     depthStencilDesc.Width = mClientWidth;
@@ -192,33 +196,36 @@ void D3DApp::OnResize()
     depthStencilDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     depthStencilDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-    D3D12_CLEAR_VALUE optClear;
+	// 书 P111
+    D3D12_CLEAR_VALUE optClear;		// 一种描述：描述用于清除资源的优化值
     optClear.Format = mDepthStencilFormat;
     optClear.DepthStencil.Depth = 1.0f;
     optClear.DepthStencil.Stencil = 0;
     ThrowIfFailed(md3dDevice->CreateCommittedResource(
-        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        &CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),		// D3D12_HEAP_TYPE_DEFAULT默认堆，只有GPU可以访问
 		D3D12_HEAP_FLAG_NONE,
         &depthStencilDesc,
 		D3D12_RESOURCE_STATE_COMMON,
         &optClear,
-        IID_PPV_ARGS(mDepthStencilBuffer.GetAddressOf())));
+        IID_PPV_ARGS(mDepthStencilBuffer.GetAddressOf())));		// 到这步就成功创建了深度/模板缓冲区
 
     // Create descriptor to mip level 0 of entire resource using the format of the resource.
-	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc;		// 描述资源中元素的数据类型（格式）
 	dsvDesc.Flags = D3D12_DSV_FLAG_NONE;
 	dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 	dsvDesc.Format = mDepthStencilFormat;
 	dsvDesc.Texture2D.MipSlice = 0;
+	// 创建深度/模板缓冲区的第0级的mipmap描述符(因为深度/模板缓冲区是2D纹理，且只有一张mipmap，所以这里也就相当于为深度/模板缓冲区创建纹理描述符)
     md3dDevice->CreateDepthStencilView(mDepthStencilBuffer.Get(), &dsvDesc, DepthStencilView());
 
+	// 转变资源状态：将资源从初始状态转换成一个深度buffer可以写入的状态
     // Transition the resource from its initial state to be used as a depth buffer.
 	mCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(mDepthStencilBuffer.Get(),
 		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_DEPTH_WRITE));
 	
     // Execute the resize commands.
     ThrowIfFailed(mCommandList->Close());
-    ID3D12CommandList* cmdsLists[] = { mCommandList.Get() };
+    ID3D12CommandList* cmdsLists[] = { mCommandList.Get() };		// cmdsLists是指针数组，数组中的每个元素都是一个指针
     mCommandQueue->ExecuteCommandLists(_countof(cmdsLists), cmdsLists);
 
 	// Wait until resize is complete.
@@ -425,27 +432,29 @@ bool D3DApp::InitDirect3D()
 
 	ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&mdxgiFactory)));
 
-	// Try to create hardware device.
+	// Try to create hardware device.	（尝试创建硬件显示适配器）
 	HRESULT hardwareResult = D3D12CreateDevice(
 		nullptr,             // default adapter
 		D3D_FEATURE_LEVEL_11_0,
 		IID_PPV_ARGS(&md3dDevice));
 
-	// Fallback to WARP device.
+	// Fallback to WARP device. (软件显示适配器)
 	if(FAILED(hardwareResult))
 	{
 		ComPtr<IDXGIAdapter> pWarpAdapter;
-		ThrowIfFailed(mdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter)));
+		ThrowIfFailed(mdxgiFactory->EnumWarpAdapter(IID_PPV_ARGS(&pWarpAdapter)));	// 枚举软件显示适配器
 
-		ThrowIfFailed(D3D12CreateDevice(
+		ThrowIfFailed(D3D12CreateDevice(	// 然后再尝试创建设备
 			pWarpAdapter.Get(),
 			D3D_FEATURE_LEVEL_11_0,
 			IID_PPV_ARGS(&md3dDevice)));
 	}
 
+	// 创建围栏
 	ThrowIfFailed(md3dDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE,
 		IID_PPV_ARGS(&mFence)));
 
+	// RTV：渲染目标视图(描述符)    DSV: 深度/模板视图(描述符)    CBV/SRV/UAV: 常量缓冲区/着色器资源/无序访问视图(描述符)
 	mRtvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	mDsvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 	mCbvSrvUavDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
@@ -454,60 +463,64 @@ bool D3DApp::InitDirect3D()
     // All Direct3D 11 capable devices support 4X MSAA for all render 
     // target formats, so we only need to check quality support.
 
-	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msQualityLevels;
+	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msQualityLevels;		// 检查4X MSAA质量级别的支持
 	msQualityLevels.Format = mBackBufferFormat;
 	msQualityLevels.SampleCount = 4;
 	msQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	msQualityLevels.NumQualityLevels = 0;
-	ThrowIfFailed(md3dDevice->CheckFeatureSupport(
+	ThrowIfFailed(md3dDevice->CheckFeatureSupport(		 // 检查4X MSAA质量级别的支持
 		D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
 		&msQualityLevels,
 		sizeof(msQualityLevels)));
 
-    m4xMsaaQuality = msQualityLevels.NumQualityLevels;
+    m4xMsaaQuality = msQualityLevels.NumQualityLevels;		// 如果支持，m4xMsaaQuality就会大于0
 	assert(m4xMsaaQuality > 0 && "Unexpected MSAA quality level.");
 	
 #ifdef _DEBUG
-    LogAdapters();
+    LogAdapters();		// 遍历Log每个显示适配器的信息
 #endif
 
-	CreateCommandObjects();
-    CreateSwapChain();
-    CreateRtvAndDsvDescriptorHeaps();
+	CreateCommandObjects();		// 创建命令队列和命令列表
+    CreateSwapChain();			// 创建交换链
+    CreateRtvAndDsvDescriptorHeaps();	// 创建RTV和DSV各自的描述符堆
 
 	return true;
 }
 
 void D3DApp::CreateCommandObjects()
 {
+	// mCommandQueue：命令队列变量
 	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
 	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
 	ThrowIfFailed(md3dDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
 
+	// mDirectCmdListAlloc：命令分配器
 	ThrowIfFailed(md3dDevice->CreateCommandAllocator(
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
 		IID_PPV_ARGS(mDirectCmdListAlloc.GetAddressOf())));
 
+	// mCommandList：命令列表
 	ThrowIfFailed(md3dDevice->CreateCommandList(
 		0,
 		D3D12_COMMAND_LIST_TYPE_DIRECT,
 		mDirectCmdListAlloc.Get(), // Associated command allocator
 		nullptr,                   // Initial PipelineStateObject
-		IID_PPV_ARGS(mCommandList.GetAddressOf())));
+		IID_PPV_ARGS(mCommandList.GetAddressOf())));		// 创建或者重置mCommandList，默认是打开的状态
 
 	// Start off in a closed state.  This is because the first time we refer 
 	// to the command list we will Reset it, and it needs to be closed before
 	// calling Reset.
-	mCommandList->Close();
+	mCommandList->Close();	// 进行关闭
 }
 
+// 书 P106
 void D3DApp::CreateSwapChain()
 {
     // Release the previous swapchain we will be recreating.
     mSwapChain.Reset();
 
-    DXGI_SWAP_CHAIN_DESC sd;
+    DXGI_SWAP_CHAIN_DESC sd;		// 需要创建交换链描述符
     sd.BufferDesc.Width = mClientWidth;
     sd.BufferDesc.Height = mClientHeight;
     sd.BufferDesc.RefreshRate.Numerator = 60;
@@ -526,9 +539,9 @@ void D3DApp::CreateSwapChain()
 
 	// Note: Swap chain uses queue to perform flush.
     ThrowIfFailed(mdxgiFactory->CreateSwapChain(
-		mCommandQueue.Get(),
-		&sd, 
-		mSwapChain.GetAddressOf()));
+		mCommandQueue.Get(),		// 渲染队列
+		&sd,								// 交换链的描述符
+		mSwapChain.GetAddressOf()));	// 交换链
 }
 
 void D3DApp::FlushCommandQueue()
@@ -560,6 +573,7 @@ ID3D12Resource* D3DApp::CurrentBackBuffer()const
 	return mSwapChainBuffer[mCurrBackBuffer].Get();
 }
 
+// 书 P108
 D3D12_CPU_DESCRIPTOR_HANDLE D3DApp::CurrentBackBufferView()const
 {
 	return CD3DX12_CPU_DESCRIPTOR_HANDLE(
