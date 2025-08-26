@@ -23,10 +23,11 @@ private:
 	double mDeltaTime;
 
 	__int64 mBaseTime;
-	__int64 mPausedTime;
-	__int64 mStopTime;
+	__int64 mPausedTime;	// 累计暂停的时间
+	__int64 mStopTime;		// 记录最后一次暂停的时间点
 	__int64 mPrevTime;
 	__int64 mCurrTime;
+	// _int64 startTime;		// Start()函数内的变量，表示再次开始运行的时间点
 
 	bool mStopped;
 };
