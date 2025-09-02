@@ -128,6 +128,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BoxApp.cpp" />
+    <ClCompile Include="Charpter01\InitDirect3DApp.cpp" />
     <ClCompile Include="Common\Camera.cpp" />
     <ClCompile Include="Common\d3dApp.cpp" />
     <ClCompile Include="Common\d3dUtil.cpp" />

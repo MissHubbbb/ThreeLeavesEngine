@@ -381,30 +381,31 @@ LRESULT D3DApp::MsgProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 bool D3DApp::InitMainWindow()
 {
-	WNDCLASS wc;
-	wc.style         = CS_HREDRAW | CS_VREDRAW;
-	wc.lpfnWndProc   = MainWndProc; 
-	wc.cbClsExtra    = 0;
+	WNDCLASS wc;	// 描述“窗口类”的结构体模板
+	wc.style         = CS_HREDRAW | CS_VREDRAW;		// 当水平/垂直尺寸变化时重绘整个窗口。
+	wc.lpfnWndProc   = MainWndProc; 	// 窗口过程回调，处理消息（键鼠、重绘、大小变化等）。
+	wc.cbClsExtra    = 0;		
 	wc.cbWndExtra    = 0;
-	wc.hInstance     = mhAppInst;
-	wc.hIcon         = LoadIcon(0, IDI_APPLICATION);
-	wc.hCursor       = LoadCursor(0, IDC_ARROW);
-	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);
+	wc.hInstance     = mhAppInst;	// 本程序实例句柄（来自 WinMain 的 hInstance）
+	wc.hIcon         = LoadIcon(0, IDI_APPLICATION);	// 加载默认应用程序图标
+	wc.hCursor       = LoadCursor(0, IDC_ARROW);		// 用系统默认箭头光标。
+	wc.hbrBackground = (HBRUSH)GetStockObject(NULL_BRUSH);	// 背景不自动擦除（为避免闪烁，通常交给 D3D 自己清屏）。
 	wc.lpszMenuName  = 0;
-	wc.lpszClassName = L"MainWnd";
+	wc.lpszClassName = L"MainWnd";	// 窗口类名，后面创建窗口会用到它。
 
-	if( !RegisterClass(&wc) )
+	if( !RegisterClass(&wc) )	// 向系统注册这个窗口类；失败弹框并返回 false
 	{
 		MessageBox(0, L"RegisterClass Failed.", 0, 0);
 		return false;
 	}
 
 	// Compute window rectangle dimensions based on requested client area dimensions.
-	RECT R = { 0, 0, mClientWidth, mClientHeight };
-    AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);
-	int width  = R.right - R.left;
+	RECT R = { 0, 0, mClientWidth, mClientHeight };	// 期望的客户区大小（渲染区域）。
+    AdjustWindowRect(&R, WS_OVERLAPPEDWINDOW, false);	// 把客户区尺寸换算成包含边框/标题栏后的“窗口矩形”尺寸。
+	int width  = R.right - R.left;		// 计算出最终的 width、height：用于创建窗口，使客户区正好是你请求的大小。
 	int height = R.bottom - R.top;
 
+	// 1:窗口类名(与上面注册的一致); 2:窗口标题文本; 3:窗口样式; 4:窗口左上角x坐标; 5:窗口左上角y坐标; 6:窗口宽度; 7:窗口高度; 8:无父窗口; 9:无菜单; 10:实例句柄; 11:无传递给窗口过程的参数
 	mhMainWnd = CreateWindow(L"MainWnd", mMainWndCaption.c_str(), 
 		WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, width, height, 0, 0, mhAppInst, 0); 
 	if( !mhMainWnd )
@@ -413,8 +414,8 @@ bool D3DApp::InitMainWindow()
 		return false;
 	}
 
-	ShowWindow(mhMainWnd, SW_SHOW);
-	UpdateWindow(mhMainWnd);
+	ShowWindow(mhMainWnd, SW_SHOW);		// 显示窗口
+	UpdateWindow(mhMainWnd);						// 更新窗口
 
 	return true;
 }
@@ -455,6 +456,8 @@ bool D3DApp::InitDirect3D()
 		IID_PPV_ARGS(&mFence)));
 
 	// RTV：渲染目标视图(描述符)    DSV: 深度/模板视图(描述符)    CBV/SRV/UAV: 常量缓冲区/着色器资源/无序访问视图(描述符)
+	// 向设备查询不同描述符堆类型的“句柄步进大小”（以字节计）。不同堆类型（RTV、DSV、CBV/SRV/UAV）在当前驱动/硬件上可能有不同的步进大小。
+	// 创建多个描述符时，需要按这个步进去偏移句柄，才能拿到下一个有效槽位。
 	mRtvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	mDsvDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 	mCbvSrvUavDescriptorSize = md3dDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
