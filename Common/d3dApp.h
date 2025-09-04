@@ -60,6 +60,7 @@ protected:
 	void CreateCommandObjects();
     void CreateSwapChain();
 
+	// 强制CPU等待GPU，直到GPU处理完队列中的所有命令，CPU才能继续下一步操作
 	void FlushCommandQueue();
 
 	ID3D12Resource* CurrentBackBuffer()const;
